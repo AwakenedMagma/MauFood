@@ -1,6 +1,7 @@
 <?php
 session_start();
 include '../config/koneksi.php';
+include '../config/retrain_trigger.php';
 include 'rekomendasi.php';
 
 // SECURITY: Check Session & Role
@@ -433,7 +434,11 @@ if (isset($_POST['submit_pesanan'])) {
                 }
                 
                 $conn->commit();
-                
+
+                // Pesanan tersimpan -> segarkan model AI di background agar pola
+                // transaksi terbaru langsung terpakai untuk rekomendasi berikutnya.
+                triggerRetrainRailway();
+
                 $memberInfoStr = "";
                 if ($member_id) {
                     $memData = getMemberDetails($conn, $member_id);

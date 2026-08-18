@@ -1,6 +1,7 @@
 <?php
 session_start();
 include '../config/koneksi.php';
+include '../config/retrain_trigger.php';
 include 'rekomendasi.php';
 
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'pelayan') {
@@ -195,6 +196,10 @@ if (isset($_POST['submit_pesanan'])) {
                         total_pengeluaran = total_pengeluaran + $total 
                     WHERE id = $member_id");
             }
+
+            // Pesanan tersimpan -> segarkan model AI di background agar pola
+            // transaksi terbaru langsung terpakai untuk rekomendasi berikutnya.
+            triggerRetrainRailway();
 
             $member_info = ($member_id && $selected_member)
                 ? " (Member: " . htmlspecialchars($selected_member['nama']) . ")"
