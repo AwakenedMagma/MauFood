@@ -1,25 +1,11 @@
 <?php
 session_start();
 include '../config/koneksi.php';
+include '../config/retrain_trigger.php';
 
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
     header('Location: ../auth/login.php');
     exit;
-}
-
-// Fungsi menembak sinyal ke Railway untuk Retrain AI
-function triggerRetrainRailway() {
-    $url = 'https://maufood-api-python-production.up.railway.app/api/trigger-retrain';
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    // Kirim password rahasia yang sama dengan di Python
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['secret' => 'rahasia_maufood_123']));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-    // Cukup tunggu 2 detik, karena Python memprosesnya di latar belakang
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10); 
-    curl_exec($ch);
-    curl_close($ch);
 }
 
 $success = '';
@@ -119,7 +105,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_menu'])) {
                 if ($imageName === '') {
                     $error = 'Gambar menu wajib diunggah.';
                 } else {
-mysqli_query($conn, "INSERT INTO menu (nama_menu, kategori, bahan_baku, rasa, harga, deskripsi, gambar) VALUES ('$namaMenu', '$kategori', $bahanSql, $rasaSql, '$harga', '$deskripsi', '$imageName')");
+                    // TiDB tidak mendukung AUTO_INCREMENT pada kolom 'id' tabel menu,
+                    // sehingga id dihitung manual di sisi PHP (bukan mengandalkan DB).
+                    $idRes  = mysqli_query($conn, "SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM menu");
+                    $nextId = (int) mysqli_fetch_assoc($idRes)['next_id'];
+
+                    mysqli_query($conn, "INSERT INTO menu (id, nama_menu, kategori, bahan_baku, rasa, harga, deskripsi, gambar) VALUES ('$nextId', '$namaMenu', '$kategori', $bahanSql, $rasaSql, '$harga', '$deskripsi', '$imageName')");
                 $success = 'Menu baru berhasil ditambahkan.';
                 triggerRetrainRailway(); // <--- TAMBAHKAN DI SINI
                 header('Location: menu.php?success=' . urlencode($success));
