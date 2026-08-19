@@ -22,17 +22,34 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])
     $deleteId = (int) $_GET['id'];
     $item = mysqli_fetch_assoc(mysqli_query($conn, "SELECT gambar FROM menu WHERE id='$deleteId'"));
     if ($item) {
-        try {
-            // Mencoba menghapus menu
-            if (!empty($item['gambar']) && file_exists(__DIR__ . '/../upload/' . $item['gambar'])) {
-            @unlink(__DIR__ . '/../upload/' . $item['gambar']);
-        }
-        triggerRetrainRailway(); // <--- TAMBAHKAN DI SINI
-        header('Location: menu.php?success=Menu berhasil dihapus');
-        exit;
-        } catch (mysqli_sql_exception $e) {
-            // Menangkap penolakan dari MySQL jika menu ada di riwayat pesanan
+        // Cek eksplisit di sisi PHP apakah menu ini pernah dipesan -- tidak
+        // mengandalkan foreign key constraint di database (constraint itu
+        // kemungkinan tidak aktif di TiDB, persis seperti AUTO_INCREMENT
+        // yang sempat hilang saat migrasi skema sebelumnya).
+        $cek = mysqli_fetch_assoc(mysqli_query(
+            $conn,
+            "SELECT COUNT(*) AS jumlah FROM detail_pesanan WHERE menu_id='$deleteId'"
+        ));
+
+        if ((int) $cek['jumlah'] > 0) {
             $error = 'Menu ini tidak bisa dihapus karena sudah tercatat dalam riwayat pesanan pelanggan.';
+        } else {
+            try {
+                // Baris DELETE ini sebelumnya tidak pernah ada -- menu yang
+                // "dihapus" hanya kehilangan gambarnya tapi tetap tersimpan
+                // di tabel menu, sehingga selalu muncul lagi setelah retrain.
+                mysqli_query($conn, "DELETE FROM menu WHERE id='$deleteId'");
+
+                if (!empty($item['gambar']) && file_exists(__DIR__ . '/../upload/' . $item['gambar'])) {
+                    @unlink(__DIR__ . '/../upload/' . $item['gambar']);
+                }
+
+                triggerRetrainRailway();
+                header('Location: menu.php?success=Menu berhasil dihapus');
+                exit;
+            } catch (mysqli_sql_exception $e) {
+                $error = 'Menu ini tidak bisa dihapus karena sudah tercatat dalam riwayat pesanan pelanggan.';
+            }
         }
     }
 }
